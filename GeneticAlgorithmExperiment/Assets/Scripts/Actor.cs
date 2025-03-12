@@ -1,9 +1,8 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VelocityGeneAlgo {
+namespace GeneticAlgorithmExperiment {
     [RequireComponent(typeof(Rigidbody))]
     public class Actor : MonoBehaviour {
         [SerializeField, TextArea]
@@ -14,11 +13,10 @@ namespace VelocityGeneAlgo {
 
         public Gene ActorGene { get; private set; }
 
-        private const int MaxTimeScore = 100;
         private float _startTime;
-        private List<GameObject> _passedScoreObjects = new();
+        private List<ScoreSphere> _passedScoreObjects = new();
         private Rigidbody _rigidbody;
-        
+
         private void Awake() {
             _startTime = Time.time;
             _rigidbody = GetComponent<Rigidbody>();
@@ -26,7 +24,7 @@ namespace VelocityGeneAlgo {
 
         public void Init(Gene gene) {
             ActorGene = gene;
-            
+
             StartCoroutine(Act());
         }
 
@@ -38,7 +36,7 @@ namespace VelocityGeneAlgo {
                     z: ActorGene.velocity[i].y);
                 yield return new WaitForSeconds(ActorGene.actTime[i]);
             }
-            
+
             _rigidbody.linearVelocity = Vector3.zero;
         }
 
@@ -47,16 +45,32 @@ namespace VelocityGeneAlgo {
         }
 
         private void OnTriggerEnter(Collider other) {
-            if(!other.CompareTag("Score")) return;
+            if(other.GetComponent<ScoreSphere>() is not { } scoreSphere) return;
 
-            // Give 1 point for each entrance into score object
-            score++;
+            // Give point(s) for each entrance into score object
+            score += scoreSphere.scoreForEachTrigger;
 
             // Give additional alive-time-based score if the object is not passed before
-            if(!_passedScoreObjects.Contains(other.gameObject)) {
-                score += Mathf.FloorToInt(Mathf.Lerp(MaxTimeScore, 0, Mathf.Clamp01((Time.time - _startTime) / GeneticAlgoManager.MaxGenerationTime)));
-                _passedScoreObjects.Add(other.gameObject);
+            if(!_passedScoreObjects.Contains(scoreSphere)) {
+                if(scoreSphere.enableTimeBasedFirstTriggerScore) {
+                    score += Mathf.FloorToInt(
+                        Mathf.Lerp(
+                            a: scoreSphere.maxTimeBasedFirstTriggerScore,
+                            b: 0,
+                            t: Mathf.Clamp01((Time.time - _startTime) / GeneticAlgoManager.MaxGenerationTime)));
+                } else {
+                    score += scoreSphere.scoreForFirstTrigger;
+                }
+
+                _passedScoreObjects.Add(scoreSphere);
             }
+        }
+
+        private void OnCollisionEnter(Collision other) {
+            if(!other.gameObject.CompareTag("ScoreMinus")) return;
+
+            // Reduce 1 point for each collision with scoreminus object
+            score--;
         }
     }
 }
